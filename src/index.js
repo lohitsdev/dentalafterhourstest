@@ -436,10 +436,15 @@ app.post('/webhook/ai-assistant', async (req, res) => {
         status: determineEmergencyStatus(req.body.pain_level)
       };
       
-      await storeCallData(storageKey, callData);
-      
-      console.log('💾 Stored call data with ID:', storageKey);
-      console.log('💾 Stored data:', callData);
+      try {
+        await storeCallData(storageKey, callData);
+        console.log('💾 Stored call data with ID:', storageKey);
+        console.log('💾 Stored data:', callData);
+      } catch (storageError) {
+        console.error('❌ Error storing call data:', storageError);
+        console.log('📁 Current working directory:', process.cwd());
+        console.log('🔧 DATA_DIR value:', process.env.DATA_DIR);
+      }
     } else {
       console.log('⚠️ No storage key found - cannot store call data');
     }
