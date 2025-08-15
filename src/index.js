@@ -1,6 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const { processWebhookEvent } = require('./utils/callHandler');
+const { handleWebhook } = require('./utils/webhookHandler');
 const cors = require('cors');
 require('dotenv').config();
 
@@ -413,54 +414,21 @@ const { storeCallData } = require('./utils/fileStorage');
 
 // AI Assistant webhook endpoint
 app.post('/webhook/ai-assistant', async (req, res) => {
+  const requestId = `ai_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  console.log(`\n${'='.repeat(80)}`);
+  console.log(`[${requestId}] 🤖 AI Assistant webhook received at ${new Date().toISOString()}`);
+  console.log('📥 Raw webhook payload:', JSON.stringify(req.body, null, 2));
+
   try {
-    console.log('🤖 AI Assistant webhook received:', JSON.stringify(req.body, null, 2));
-
-    // Store call data for final summary using call_control_id
-    const callControlId = req.body.call_control_id;
-    const conversationalId = req.body.Conversational_id;
-    
-    console.log('🔍 Debug - callControlId:', callControlId);
-    console.log('🔍 Debug - conversationalId:', conversationalId);
-    
-    // Use call_control_id if available, otherwise use Conversational_id
-    const storageKey = callControlId || conversationalId;
-    
-    console.log('🔍 Debug - storageKey:', storageKey);
-    
-    if (storageKey) {
-      const callData = {
-        name: req.body.name || 'Unknown',
-        phone: req.body.phone || 'Unknown',
-        pain_level: req.body.pain_level || 0,
-        status: determineEmergencyStatus(req.body.pain_level)
-      };
-      
-      try {
-        await storeCallData(storageKey, callData);
-        console.log('💾 Stored call data with ID:', storageKey);
-        console.log('💾 Stored data:', callData);
-      } catch (storageError) {
-        console.error('❌ Error storing call data:', storageError);
-        console.log('📁 Current working directory:', process.cwd());
-        console.log('🔧 DATA_DIR value:', process.env.DATA_DIR);
-      }
-    } else {
-      console.log('⚠️ No storage key found - cannot store call data');
-    }
-
-    // Process webhook event
-    await processWebhookEvent({
-      data: {
-        event_type: 'assistant.event',
-        payload: req.body
-      }
-    });
-
-    res.status(200).json({ message: 'OK' });
+    await handleWebhook(req.body);
+    console.log(`[${requestId}] ✅ Webhook processed successfully`);
+    res.status(200).json({ message: 'OK', requestId });
   } catch (error) {
-    console.error('❌ Error processing AI assistant webhook:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error(`[${requestId}] ❌ Error processing AI assistant webhook:`, error);
+    console.error('Stack trace:', error.stack);
+    res.status(500).json({ error: 'Internal server error', requestId });
+  } finally {
+    console.log(`${'='.repeat(80)}\n`);
   }
 });
 
