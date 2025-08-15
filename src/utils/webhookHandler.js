@@ -17,67 +17,64 @@ async function handleWebhook(webhookData) {
 }
 
 async function handleInitialWebhook(webhookData) {
-  const patientInfo = extractPatientInfo(webhookData);
-  const storageKey = generateStorageKey(patientInfo.phone);
-  await updatePatientRecord(storageKey, patientInfo);
-  console.log('Initial patient record created:', patientInfo);
+  const { call_control_id, name, phone, pain_level } = webhookData;
+  
+  if (!call_control_id) {
+    console.log('No call_control_id found, skipping storage');
+    return;
+  }
+
+  const patientInfo = {
+    call_control_id,
+    name: name || 'Unknown',
+    phone: phone || 'Unknown',
+    pain_level: pain_level || null,
+    timeCalled: new Date().toLocaleTimeString(),
+    timestamp: new Date().toISOString()
+  };
+
+  await updatePatientRecord(call_control_id, patientInfo);
+  console.log('✅ Patient data saved with call_control_id:', call_control_id);
+  console.log('📋 Patient info:', patientInfo);
 }
 
 async function handleConversationInsight(webhookData) {
   const { payload } = webhookData;
   const aiSummary = payload.results[0]?.result || 'No summary available';
-  const phone = extractPhoneFromSummary(aiSummary);
-  const storageKey = generateStorageKey(phone);
+  const callControlId = payload.metadata.call_control_id;
   
-  console.log('Extracted phone:', phone);
-  console.log('Generated storage key:', storageKey);
+  console.log('🔍 Looking for stored data with call_control_id:', callControlId);
 
-  let patientInfo = await getCallData(storageKey);
+  let patientInfo = await getCallData(callControlId);
 
   if (patientInfo) {
-    console.log('Found existing patient record:', patientInfo);
-    patientInfo = {
-      ...patientInfo,
-      aiSummary,
-      symptoms: extractSymptomsFromSummary(aiSummary)
-    };
-    await updatePatientRecord(storageKey, patientInfo);
-    console.log('Patient record updated with AI insights:', patientInfo);
-
-    // Send email notification
+    console.log('✅ Found existing patient record:', patientInfo);
+    
+    // Update with AI summary and extracted symptoms
+    patientInfo.aiSummary = aiSummary;
+    patientInfo.symptoms = extractSymptomsFromSummary(aiSummary);
+    
+    console.log('📧 Sending email notification...');
     await sendEmailNotification(patientInfo);
+    
+    console.log('✅ Email sent successfully for patient:', patientInfo.name);
   } else {
-    console.log('No matching patient record found for phone:', phone);
-    // Create a new record if not found
-    patientInfo = {
-      name: extractNameFromSummary(aiSummary),
-      phone: phone,
-      aiSummary,
-      symptoms: extractSymptomsFromSummary(aiSummary),
-      timeCalled: new Date().toLocaleTimeString(),
-      timestamp: new Date().toISOString()
-    };
-    await updatePatientRecord(storageKey, patientInfo);
-    console.log('New patient record created:', patientInfo);
-    await sendEmailNotification(patientInfo);
+    console.log('❌ No matching patient record found for call_control_id:', callControlId);
   }
 }
 
 function extractPatientInfo(webhookData) {
-  const { name, phone, pain_level } = webhookData;
+  const { name, phone, pain_level, call_control_id } = webhookData;
   return {
     name: name || 'Unknown',
     phone: phone || 'Unknown',
     pain_level: pain_level || null,
+    call_control_id: call_control_id,
     symptoms: 'Not specified',
     timeCalled: new Date().toLocaleTimeString(),
     timestamp: new Date().toISOString(),
     aiSummary: ''
   };
-}
-
-function generateStorageKey(phone) {
-  return phone.replace(/\D/g, '');
 }
 
 function extractPhoneFromSummary(summary) {
