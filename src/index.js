@@ -436,25 +436,7 @@ app.post('/webhook/ai-assistant', async (req, res) => {
   }
 });
 
-// AI Assistant Insights webhook endpoint (call completion)
-app.post('/webhook/ai/insights', async (req, res) => {
-  const requestId = `insights_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-  console.log(`\n${'='.repeat(80)}`);
-  console.log(`[${requestId}] 🧠 AI Insights webhook received at ${new Date().toISOString()}`);
-  console.log('📥 Raw webhook payload:', JSON.stringify(req.body, null, 2));
-
-  try {
-    await handleWebhook(req.body);
-    console.log(`[${requestId}] ✅ AI Insights webhook processed successfully`);
-    res.status(200).json({ message: 'OK', requestId });
-  } catch (error) {
-    console.error(`[${requestId}] ❌ Error processing AI Insights webhook:`, error);
-    console.error('Stack trace:', error.stack);
-    res.status(500).json({ error: 'Internal server error', requestId });
-  } finally {
-    console.log(`${'='.repeat(80)}\n`);
-  }
-});
+// Remove the separate AI Assistant Insights webhook endpoint as it's now handled by the main webhook endpoint
 
 // Test endpoint for AI insights
 app.post('/test-insights', async (req, res) => {

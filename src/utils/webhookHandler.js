@@ -1,4 +1,6 @@
-const { updatePatientRecord, getCallData, deleteCallData } = require('./patientData');
+const { updatePatientRecord, getCallData } = require('./patientData');
+const { sendReceptionistSummary } = require('../email');
+const { getPracticeSettings } = require('../config');
 
 async function handleWebhook(webhookData) {
   console.log('Processing webhook data:', JSON.stringify(webhookData, null, 2));
@@ -23,11 +25,9 @@ async function handleInitialWebhook(webhookData) {
 
 async function handleConversationInsight(webhookData) {
   const { payload } = webhookData;
-  const callControlId = payload.metadata.call_control_id;
-  const conversationId = payload.conversation_id;
   const aiSummary = payload.results[0]?.result || 'No summary available';
-
   const storageKey = generateStorageKey(extractPhoneFromSummary(aiSummary));
+  
   let patientInfo = await getCallData(storageKey);
 
   if (patientInfo) {
@@ -41,37 +41,33 @@ async function handleConversationInsight(webhookData) {
 
     // Send email notification
     await sendEmailNotification(patientInfo);
-
-    // Clean up stored data
-    await deleteCallData(storageKey);
-    console.log('Cleaned up stored data for key:', storageKey);
   } else {
     console.log('No matching patient record found for conversation insight');
+    // Create a new record if not found
+    patientInfo = {
+      name: extractNameFromSummary(aiSummary),
+      phone: extractPhoneFromSummary(aiSummary),
+      aiSummary,
+      symptoms: extractSymptomsFromSummary(aiSummary),
+      timeCalled: new Date().toLocaleTimeString(),
+      timestamp: new Date().toISOString()
+    };
+    await updatePatientRecord(storageKey, patientInfo);
+    await sendEmailNotification(patientInfo);
   }
 }
 
 function extractPatientInfo(webhookData) {
   const { name, phone, pain_level } = webhookData;
-  const status = determineEmergencyStatus(pain_level);
-
   return {
     name: name || 'Unknown',
     phone: phone || 'Unknown',
     pain_level: pain_level || null,
     symptoms: 'Not specified',
-    status,
     timeCalled: new Date().toLocaleTimeString(),
     timestamp: new Date().toISOString(),
     aiSummary: ''
   };
-}
-
-function determineEmergencyStatus(painLevel) {
-  if (painLevel === null || painLevel === undefined || isNaN(painLevel)) {
-    return 'Non-Emergency';
-  }
-  const numericPainLevel = Number(painLevel);
-  return numericPainLevel >= 7 ? 'Emergency' : 'Non-Emergency';
 }
 
 function generateStorageKey(phone) {
@@ -79,17 +75,19 @@ function generateStorageKey(phone) {
 }
 
 function extractPhoneFromSummary(summary) {
-  const phoneMatch = summary.match(/(\d{3}-\d{3}-\d{2})/);
+  const phoneMatch = summary.match(/(\d{3}-\d{3}-\d{4})/);
   return phoneMatch ? phoneMatch[1].replace(/-/g, '') : 'Unknown';
 }
 
-function extractSymptomsFromSummary(summary) {
-  const symptomsMatch = summary.match(/reason for his call is to address his (.*?) issue/);
-  return symptomsMatch ? symptomsMatch[1] : 'Not specified';
+function extractNameFromSummary(summary) {
+  const nameMatch = summary.match(/(\w+) contacted/);
+  return nameMatch ? nameMatch[1] : 'Unknown';
 }
 
-const { sendReceptionistSummary } = require('../email');
-const { getPracticeSettings } = require('../config');
+function extractSymptomsFromSummary(summary) {
+  const symptomsMatch = summary.match(/reason for calling as (.*?) with a pain level/);
+  return symptomsMatch ? symptomsMatch[1] : 'Not specified';
+}
 
 async function sendEmailNotification(patientInfo) {
   try {
@@ -97,7 +95,7 @@ async function sendEmailNotification(patientInfo) {
     const emailData = {
       name: patientInfo.name,
       phone: patientInfo.phone,
-      status: patientInfo.status,
+      symptoms: patientInfo.symptoms,
       summary: patientInfo.aiSummary,
       timeCalled: patientInfo.timeCalled,
       timestamp: patientInfo.timestamp
