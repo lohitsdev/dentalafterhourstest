@@ -26,11 +26,16 @@ async function handleInitialWebhook(webhookData) {
 async function handleConversationInsight(webhookData) {
   const { payload } = webhookData;
   const aiSummary = payload.results[0]?.result || 'No summary available';
-  const storageKey = generateStorageKey(extractPhoneFromSummary(aiSummary));
+  const phone = extractPhoneFromSummary(aiSummary);
+  const storageKey = generateStorageKey(phone);
   
+  console.log('Extracted phone:', phone);
+  console.log('Generated storage key:', storageKey);
+
   let patientInfo = await getCallData(storageKey);
 
   if (patientInfo) {
+    console.log('Found existing patient record:', patientInfo);
     patientInfo = {
       ...patientInfo,
       aiSummary,
@@ -42,17 +47,18 @@ async function handleConversationInsight(webhookData) {
     // Send email notification
     await sendEmailNotification(patientInfo);
   } else {
-    console.log('No matching patient record found for conversation insight');
+    console.log('No matching patient record found for phone:', phone);
     // Create a new record if not found
     patientInfo = {
       name: extractNameFromSummary(aiSummary),
-      phone: extractPhoneFromSummary(aiSummary),
+      phone: phone,
       aiSummary,
       symptoms: extractSymptomsFromSummary(aiSummary),
       timeCalled: new Date().toLocaleTimeString(),
       timestamp: new Date().toISOString()
     };
     await updatePatientRecord(storageKey, patientInfo);
+    console.log('New patient record created:', patientInfo);
     await sendEmailNotification(patientInfo);
   }
 }
@@ -75,8 +81,8 @@ function generateStorageKey(phone) {
 }
 
 function extractPhoneFromSummary(summary) {
-  const phoneMatch = summary.match(/(\d{3}-\d{3}-\d{4})/);
-  return phoneMatch ? phoneMatch[1].replace(/-/g, '') : 'Unknown';
+  const phoneMatch = summary.match(/(\d{1}-\d{3}-\d{3}-\d{2}|\d{3}-\d{3}-\d{4}|\d{10})/);
+  return phoneMatch ? phoneMatch[1].replace(/\D/g, '') : 'Unknown';
 }
 
 function extractNameFromSummary(summary) {

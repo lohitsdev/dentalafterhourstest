@@ -423,6 +423,12 @@ app.post('/webhook/ai-assistant', async (req, res) => {
     const webhookType = req.body.event_type === 'conversation_insight_result' ? 'Conversation Insight' : 'Initial';
     console.log(`[${requestId}] Processing ${webhookType} webhook`);
 
+    // Log call_control_id and Conversational_id if they exist
+    const callControlId = req.body.call_control_id;
+    const conversationalId = req.body.Conversational_id;
+    console.log('🔍 Debug - callControlId:', callControlId);
+    console.log('🔍 Debug - conversationalId:', conversationalId);
+
     await handleWebhook(req.body);
 
     console.log(`[${requestId}] ✅ ${webhookType} webhook processed successfully`);
@@ -430,11 +436,15 @@ app.post('/webhook/ai-assistant', async (req, res) => {
   } catch (error) {
     console.error(`[${requestId}] ❌ Error processing AI assistant webhook:`, error);
     console.error('Stack trace:', error.stack);
+    console.log('📁 Current working directory:', process.cwd());
+    console.log('🔧 DATA_DIR value:', process.env.DATA_DIR);
     res.status(500).json({ error: 'Internal server error', requestId });
   } finally {
     console.log(`${'='.repeat(80)}\n`);
   }
 });
+
+// Remove the separate AI Assistant Insights webhook endpoint as it's now handled by the main webhook endpoint
 
 // Remove the separate AI Assistant Insights webhook endpoint as it's now handled by the main webhook endpoint
 
