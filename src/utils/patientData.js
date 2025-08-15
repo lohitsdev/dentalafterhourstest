@@ -1,8 +1,7 @@
-const { storeCallData, getCallData } = require('./fileStorage');
+const { storeCallData, getCallData, deleteCallData } = require('./fileStorage');
 
-async function updatePatientRecord(patientInfo) {
-  const key = patientInfo.phone.replace(/\D/g, ''); // Remove non-digit characters
-  let existingData = await getCallData(key);
+async function updatePatientRecord(storageKey, patientInfo) {
+  let existingData = await getCallData(storageKey);
 
   if (existingData) {
     // Update existing record
@@ -12,8 +11,21 @@ async function updatePatientRecord(patientInfo) {
     existingData = patientInfo;
   }
 
-  await storeCallData(key, existingData);
+  await storeCallData(storageKey, existingData);
   console.log(`Patient record updated for ${patientInfo.name}`);
 }
 
-module.exports = { updatePatientRecord };
+async function getPatientRecord(storageKey) {
+  return await getCallData(storageKey);
+}
+
+async function deletePatientRecord(storageKey) {
+  await deleteCallData(storageKey);
+  console.log(`Patient record deleted for key ${storageKey}`);
+}
+
+module.exports = { 
+  updatePatientRecord, 
+  getCallData: getPatientRecord, 
+  deleteCallData: deletePatientRecord 
+};
